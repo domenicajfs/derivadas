@@ -19,7 +19,7 @@
       background-color: #b2ebf2;
       padding: 20px;
       border-radius: 12px;
-      max-width: 600px;
+      max-width: 800px;
       margin: auto;
     }
     label, input, button {
@@ -36,11 +36,20 @@
       border-radius: 8px;
       cursor: pointer;
     }
-    #steps, #result, #plot {
+    #steps, #shortSteps, #result, #limitResult, #plot, #table {
       background: #e0f7f9;
       border-radius: 8px;
       padding: 15px;
       margin-top: 20px;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+    th, td {
+      border: 1px solid #0097a7;
+      padding: 8px;
+      text-align: center;
     }
     canvas {
       max-width: 100%;
@@ -54,40 +63,47 @@
   <div id="calculator">
     <label for="functionInput">Ingresa la función (por ejemplo: (3*x^2 + 1)/(x - 4)):</label>
     <input type="text" id="functionInput" placeholder="Escribe tu función aquí">
-    <button onclick="resolverDerivada()">Calcular derivada</button>
+    <button id="calcButton">Calcular derivada</button>
 
+    <div id="shortSteps"></div>
     <div id="steps"></div>
     <div id="result"></div>
+    <div id="limitResult"></div>
+    <div id="table"></div>
     <div id="plot">
       <canvas id="graphCanvas"></canvas>
     </div>
   </div>
 
   <script>
-    function resolverDerivada() {
+    document.getElementById('calcButton').addEventListener('click', function resolverDerivada() {
       const expr = document.getElementById('functionInput').value;
       try {
         const node = math.parse(expr);
         const simplified = math.simplify(node);
         const derivative = math.derivative(expr, 'x').toString();
+
+        const shortStepsEl = document.getElementById('shortSteps');
         const stepsEl = document.getElementById('steps');
         const resultEl = document.getElementById('result');
+        const tableEl = document.getElementById('table');
+        const limitEl = document.getElementById('limitResult');
         const plotEl = document.getElementById('graphCanvas');
 
-        stepsEl.innerHTML = '<h3>Procedimiento paso a paso:</h3>';
+        shortStepsEl.innerHTML = '<h3>Proceso corto:</h3>';
+        shortStepsEl.innerHTML += `<p>f'(x) = ${derivative}</p>`;
 
-        // Simulación de pasos numéricos (para efectos demostrativos)
+        stepsEl.innerHTML = '<h3>Procedimiento largo paso a paso:</h3>';
         const steps = [
           `1. Función original: f(x) = ${expr}`,
           `2. Reescribir términos si es necesario: ${simplified.toString()}`,
-          `3. Identificar regla a usar: derivación de función racional`,
-          `4. Aplicar regla del cociente: [f'(x)g(x) - f(x)g'(x)] / g(x)^2`,
-          `5. Derivar numerador: f'(x)`,
-          `6. Derivar denominador: g'(x)`,
-          `7. Sustituir derivadas en la fórmula del cociente`,
-          `8. Simplificar la expresión final: ${derivative}`
+          `3. Identificar regla a usar: derivación de función racional o compuesta`,
+          `4. Aplicar reglas de derivación apropiadas`,
+          `5. Derivar numerador o componentes`,
+          `6. Derivar denominador si existe`,
+          `7. Sustituir derivadas`,
+          `8. Simplificar: f'(x) = ${derivative}`
         ];
-
         steps.forEach(step => {
           const p = document.createElement('p');
           p.textContent = step;
@@ -96,60 +112,42 @@
 
         resultEl.innerHTML = `<h3>Resultado final:</h3><p>f'(x) = ${derivative}</p>`;
 
-        // Generar datos para graficar
+        let limitLeft = 'No definido';
+        let limitRight = 'No definido';
+        try {
+          limitLeft = math.evaluate(`limit(${expr}, x, 0, 'left')`);
+          limitRight = math.evaluate(`limit(${expr}, x, 0, 'right')`);
+        } catch (e) {
+          limitLeft = 'Error al calcular';
+          limitRight = 'Error al calcular';
+        }
+
+        limitEl.innerHTML = `<h3>Límites alrededor de x = 0:</h3>
+          <p>Límite por la izquierda: ${limitLeft}</p>
+          <p>Límite por la derecha: ${limitRight}</p>`;
+
+        // Tabla de valores
+        let tableHTML = '<h3>Tabla de valores:</h3><table><tr><th>x</th><th>f(x)</th><th>f'(x)</th></tr>';
         const compiledOriginal = math.compile(expr);
         const compiledDerivative = math.compile(derivative);
+        for (let x = -5; x <= 5; x++) {
+          try {
+            const fx = compiledOriginal.evaluate({ x });
+            const dfx = compiledDerivative.evaluate({ x });
+            tableHTML += `<tr><td>${x}</td><td>${fx.toFixed(4)}</td><td>${dfx.toFixed(4)}</td></tr>`;
+          } catch {
+            tableHTML += `<tr><td>${x}</td><td>undefined</td><td>undefined</td></tr>`;
+          }
+        }
+        tableHTML += '</table>';
+        tableEl.innerHTML = tableHTML;
+
+        // Gráfica
         const labels = [], origData = [], derivData = [];
         for (let x = -10; x <= 10; x += 0.5) {
           try {
             labels.push(x);
-            origData.push(compiledOriginal.evaluate({x}));
-            derivData.push(compiledDerivative.evaluate({x}));
-          } catch (e) {
+            origData.push(compiledOriginal.evaluate({ x }));
+            derivData.push(compiledDerivative.evaluate({ x }));
+          } catch {
             origData.push(null);
-            derivData.push(null);
-          }
-        }
-
-        new Chart(plotEl, {
-          type: 'line',
-          data: {
-            labels,
-            datasets: [
-              {
-                label: 'f(x)',
-                data: origData,
-                borderColor: '#007d8a',
-                fill: false
-              },
-              {
-                label: "f'(x)",
-                data: derivData,
-                borderColor: '#004d4d',
-                borderDash: [5, 5],
-                fill: false
-              }
-            ]
-          },
-          options: {
-            responsive: true,
-            plugins: {
-              legend: {
-                position: 'top'
-              },
-              title: {
-                display: true,
-                text: 'Gráfica de f(x) y f\'(x)'
-              }
-            }
-          }
-        });
-
-      } catch (error) {
-        document.getElementById('steps').innerHTML = '<p style="color:red">Error en la función ingresada. Asegúrate de que esté bien escrita.</p>';
-        document.getElementById('result').innerHTML = '';
-      }
-    }
-  </script>
-</body>
-</html>
